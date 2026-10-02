@@ -1,0 +1,64 @@
+import { expect, request, test } from '@playwright/test';
+
+test('owner browser flow and separate scoped clients preserve history', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.getByLabel('Username').fill('owner');
+  await page.getByLabel('Password').fill('correct horse battery staple');
+  const setup = page.getByRole('button', { name: 'Create owner' });
+  await (await setup.isVisible() ? setup : page.getByRole('button', { name: 'Sign in' })).click();
+  await expect(page.getByRole('heading', { name: 'Your wellbeing journal' })).toBeVisible();
+  await expect(page.getByText('No records here yet')).toBeVisible();
+  const assistantApi = await request.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+  await page.getByRole('button', { name: 'Add sleep record' }).click();
+  await page.getByLabel('Local date').fill('2025-02-02');
+  await page.getByLabel('Duration in minutes').fill('420');
+  await page.getByRole('button', { name: 'Save record' }).click();
+  await expect(page.getByText('7h 00m')).toBeVisible();
+  await page.getByRole('checkbox').first().check();
+  await page.getByRole('button', { name: 'Group selected' }).click();
+  await expect(page.getByText(/1 explicit session/)).toBeVisible();
+  await page.getByRole('button', { name: 'Notes' }).click();
+  await page.getByLabel('New note').fill('Synthetic browser note');
+  await page.getByRole('button', { name: 'Save note' }).click();
+  await expect(page.getByText('Synthetic browser note')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Edit note').fill('Synthetic edited browser note');
+  await page.getByRole('button', { name: 'Save revision' }).click();
+  await page.getByRole('button', { name: 'History' }).click();
+  await expect(page.getByRole('heading', { name: 'Note history' })).toBeVisible();
+  await page.getByRole('button', { name: /Close note history/i }).click();
+  await page.getByRole('button', { name: 'Journal' }).click();
+  const status = await (await page.request.get('/api/v1/auth/status')).json();
+  const ownerHeaders = { origin: new URL(page.url()).origin, 'x-csrf-token': status.csrfToken };
+  const expiry = new Date(Date.now() + 86_400_000).toISOString();
+  const readCredential = await page.request.post('/api/v1/credentials', { headers: ownerHeaders, data: { name: `e2e read ${testInfo.project.name}`, scopes: ['events:read'], expiresAt: expiry } });
+  const writeCredential = await page.request.post('/api/v1/credentials', { headers: ownerHeaders, data: { name: `e2e write ${testInfo.project.name}`, scopes: ['events:write'], expiresAt: expiry } });
+  expect(readCredential.status()).toBe(201); expect(writeCredential.status()).toBe(201);
+  const readHeaders = { authorization: `Bearer ${(await readCredential.json()).token}` };
+  const writeHeaders = { authorization: `Bearer ${(await writeCredential.json()).token}` };
+  const listed = await assistantApi.get('/api/v1/events', { headers: readHeaders });
+  const events = await listed.json();
+  const id = events[0].id;
+  const originalRevision = events[0].currentRevision;
+  const duplicatePayload = { id: `e2e-duplicate-${testInfo.project.name}`, eventType: 'sleep_duration', timezone: 'UTC', localDate: '2025-02-03', durationMinutes: 0 };
+  const duplicateHeaders = { ...writeHeaders, 'idempotency-key': `duplicate-${testInfo.project.name}` };
+  const first = await assistantApi.post('/api/v1/events', { headers: duplicateHeaders, data: duplicatePayload });
+  const replay = await assistantApi.post('/api/v1/events', { headers: duplicateHeaders, data: duplicatePayload });
+  expect(first.status()).toBe(201); expect(await replay.text()).toBe(await first.text());
+  const corrected = await assistantApi.put(`/api/v1/events/${id}`, { headers: { ...writeHeaders, 'idempotency-key': `correction-${testInfo.project.name}` }, data: { expectedRevision: originalRevision, durationMinutes: 435, correctionReason: 'Synthetic second-client correction' } });
+  expect(corrected.status()).toBe(200);
+  const stale = await assistantApi.put(`/api/v1/events/${id}`, { headers: { ...writeHeaders, 'idempotency-key': `stale-${testInfo.project.name}` }, data: { expectedRevision: originalRevision, durationMinutes: 440 } });
+  expect(stale.status()).toBe(409);
+
+  await page.getByRole('button', { name: 'Refresh records' }).click();
+  await expect(page.getByText('7h 15m')).toBeVisible();
+  const targetCard = page.locator('.event-card').filter({ hasText: '7h 15m' });
+  await targetCard.getByRole('button', { name: /View history/ }).click();
+  await expect(page.getByText(new RegExp(`Revision ${originalRevision + 1}`))).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('mobile-history.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole('heading', { name: 'Record history' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('desktop-history.png'), fullPage: true });
+  } finally { await assistantApi.dispose(); }
+});

@@ -1,0 +1,405 @@
+{
+  "fixtureVersion": 1,
+  "syntheticOnly": true,
+  "notice": "Fictional records for automated tests. They are not copied or derived from any person's journal.",
+  "actors": {
+    "owner": "owner:fixture",
+    "reader": "assistant:fixture-reader",
+    "writerA": "assistant:fixture-writer-a",
+    "writerB": "assistant:fixture-writer-b"
+  },
+  "sessions": [
+    {
+      "id": "ses-spring-forward",
+      "kind": "overnight",
+      "localAnchorDate": "2025-03-09",
+      "timezone": "America/New_York",
+      "groupingProvenance": "explicit"
+    },
+    {
+      "id": "ses-fall-back",
+      "kind": "overnight",
+      "localAnchorDate": "2025-11-02",
+      "timezone": "America/New_York",
+      "groupingProvenance": "explicit"
+    },
+    {
+      "id": "ses-nap-one",
+      "kind": "nap",
+      "localAnchorDate": "2025-01-15",
+      "timezone": "America/Los_Angeles",
+      "groupingProvenance": "explicit"
+    }
+  ],
+  "events": [
+    {
+      "caseId": "dst-spring-valid",
+      "input": {
+        "id": "evt-spring-window",
+        "eventType": "wake_report",
+        "startAtLocal": "2025-03-09T01:30:00",
+        "endAtLocal": "2025-03-09T03:30:00",
+        "localDate": "2025-03-09",
+        "timezone": "America/New_York",
+        "localOffset": "-05:00",
+        "endLocalOffset": "-04:00",
+        "source": "user_reported",
+        "confidence": "high",
+        "sessionId": "ses-spring-forward",
+        "pairingProvenance": "explicit_session",
+        "notes": "Synthetic spring transition interval."
+      },
+      "expected": {
+        "elapsedWindowMinutes": 60,
+        "durationMinutes": null,
+        "rule": "The elapsed window is not total sleep duration."
+      }
+    },
+    {
+      "caseId": "dst-spring-nonexistent",
+      "input": {
+        "id": "evt-spring-gap",
+        "eventType": "sleep_onset",
+        "startAtLocal": "2025-03-09T02:30:00",
+        "localDate": "2025-03-09",
+        "timezone": "America/New_York",
+        "localOffset": "-05:00",
+        "source": "user_reported",
+        "confidence": "medium"
+      },
+      "expectedError": {
+        "status": 422,
+        "code": "time_integrity_error",
+        "contains": "Nonexistent"
+      }
+    },
+    {
+      "caseId": "dst-fall-ambiguous-missing-offset",
+      "input": {
+        "id": "evt-fall-ambiguous",
+        "eventType": "night_awakening",
+        "startAtLocal": "2025-11-02T01:30:00",
+        "localDate": "2025-11-02",
+        "timezone": "America/New_York",
+        "source": "user_reported",
+        "confidence": "high"
+      },
+      "expectedError": {
+        "status": 422,
+        "code": "time_integrity_error",
+        "contains": "offset"
+      }
+    },
+    {
+      "caseId": "dst-fall-valid",
+      "input": {
+        "id": "evt-fall-window",
+        "eventType": "wake_report",
+        "startAtLocal": "2025-11-02T00:30:00",
+        "endAtLocal": "2025-11-02T02:30:00",
+        "localDate": "2025-11-02",
+        "timezone": "America/New_York",
+        "localOffset": "-04:00",
+        "endLocalOffset": "-05:00",
+        "source": "user_reported",
+        "confidence": "high",
+        "sessionId": "ses-fall-back",
+        "pairingProvenance": "explicit_session"
+      },
+      "expected": {
+        "elapsedWindowMinutes": 180,
+        "durationMinutes": null
+      }
+    },
+    {
+      "caseId": "dst-fall-first-instance",
+      "input": {
+        "id": "evt-fall-first",
+        "eventType": "night_awakening",
+        "startAtLocal": "2025-11-02T01:30:00",
+        "localDate": "2025-11-02",
+        "timezone": "America/New_York",
+        "localOffset": "-04:00",
+        "source": "user_reported",
+        "confidence": "high"
+      },
+      "expected": {
+        "utc": "2025-11-02T05:30:00.000Z"
+      }
+    },
+    {
+      "caseId": "dst-fall-second-instance",
+      "input": {
+        "id": "evt-fall-second",
+        "eventType": "night_awakening",
+        "startAtLocal": "2025-11-02T01:30:00",
+        "localDate": "2025-11-02",
+        "timezone": "America/New_York",
+        "localOffset": "-05:00",
+        "source": "user_reported",
+        "confidence": "high"
+      },
+      "expected": {
+        "utc": "2025-11-02T06:30:00.000Z"
+      }
+    },
+    {
+      "caseId": "unknown-time-with-range",
+      "input": {
+        "id": "evt-uncertain-onset",
+        "eventType": "estimated_sleep_onset",
+        "startAtLocal": null,
+        "endAtLocal": null,
+        "localDate": "2025-02-10",
+        "timezone": "America/Los_Angeles",
+        "localOffset": null,
+        "durationMinutes": null,
+        "source": "user_reported",
+        "confidence": "medium",
+        "uncertainty": {
+          "earliestLocal": "2025-02-10T23:10:00",
+          "earliestOffset": "-08:00",
+          "latestLocal": "2025-02-10T23:50:00",
+          "latestOffset": "-08:00",
+          "prose": "Synthetic estimate within a forty-minute range."
+        }
+      },
+      "expected": {
+        "startAtLocal": null,
+        "durationMinutes": null,
+        "mustNotChooseMidpoint": true
+      }
+    },
+    {
+      "caseId": "unknown-wake-and-duration",
+      "input": {
+        "id": "evt-missing-wake",
+        "eventType": "sleep_onset",
+        "startAtLocal": "2025-02-11T23:45:00",
+        "endAtLocal": null,
+        "localDate": "2025-02-11",
+        "timezone": "America/Los_Angeles",
+        "localOffset": "-08:00",
+        "durationMinutes": null,
+        "source": "user_reported",
+        "confidence": "high"
+      },
+      "expected": {
+        "elapsedWindowMinutes": null,
+        "durationMinutes": null
+      }
+    },
+    {
+      "caseId": "duration-only",
+      "input": {
+        "id": "evt-duration-only",
+        "eventType": "duration_report",
+        "startAtLocal": null,
+        "endAtLocal": null,
+        "localDate": "2025-02-12",
+        "timezone": "America/Los_Angeles",
+        "durationMinutes": 365,
+        "source": "user_reported",
+        "confidence": "medium"
+      },
+      "expected": {
+        "durationMinutes": 365,
+        "mustNotInventEndpoints": true
+      }
+    },
+    {
+      "caseId": "nap-complete",
+      "input": {
+        "id": "evt-nap-complete",
+        "eventType": "nap",
+        "startAtLocal": "2025-01-15T14:10:00",
+        "endAtLocal": "2025-01-15T14:40:00",
+        "localDate": "2025-01-15",
+        "timezone": "America/Los_Angeles",
+        "localOffset": "-08:00",
+        "endLocalOffset": "-08:00",
+        "durationMinutes": 30,
+        "source": "user_reported",
+        "confidence": "high",
+        "sessionId": "ses-nap-one",
+        "pairingProvenance": "explicit_session"
+      },
+      "expected": {
+        "napCountContribution": 1,
+        "durationMinutes": 30
+      }
+    },
+    {
+      "caseId": "correction-base",
+      "input": {
+        "id": "evt-correction-base",
+        "eventType": "final_wake",
+        "startAtLocal": "2025-02-13T07:20:00",
+        "localDate": "2025-02-13",
+        "timezone": "America/Los_Angeles",
+        "localOffset": "-08:00",
+        "source": "user_reported",
+        "confidence": "medium",
+        "notes": "Synthetic initial report."
+      },
+      "expected": {
+        "activeBeforeCorrection": true,
+        "initialRevision": 1
+      }
+    },
+    {
+      "caseId": "correction-superseding",
+      "input": {
+        "id": "evt-correction-new",
+        "eventType": "correction",
+        "startAtLocal": "2025-02-13T07:05:00",
+        "localDate": "2025-02-13",
+        "timezone": "America/Los_Angeles",
+        "localOffset": "-08:00",
+        "source": "user_reported",
+        "confidence": "high",
+        "supersedesEventId": "evt-correction-base",
+        "notes": "Synthetic corrected report."
+      },
+      "expected": {
+        "activeIds": ["evt-correction-new"],
+        "historyRetainsIds": ["evt-correction-base", "evt-correction-new"]
+      }
+    },
+    {
+      "caseId": "restedness-missing",
+      "input": {
+        "id": "evt-restedness-missing",
+        "eventType": "restedness",
+        "localDate": "2025-02-14",
+        "timezone": "America/Los_Angeles",
+        "numericValue": null,
+        "source": "user_reported",
+        "confidence": "low"
+      },
+      "expected": {
+        "numericValue": null,
+        "mustNotTreatAsZero": true
+      }
+    }
+  ],
+  "operations": [
+    {
+      "caseId": "revision-success-then-stale",
+      "steps": [
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "events:update:evt-correction-base",
+          "body": {
+            "expectedRevision": 1,
+            "notes": "Synthetic revision two.",
+            "correctionReason": "Synthetic clarification."
+          },
+          "expectedStatus": 200,
+          "expectedRevision": 2
+        },
+        {
+          "actor": "assistant:fixture-writer-b",
+          "operation": "events:update:evt-correction-base",
+          "body": {
+            "expectedRevision": 1,
+            "notes": "Synthetic stale write."
+          },
+          "expectedStatus": 409,
+          "expectedCode": "revision_conflict",
+          "expectedCurrentRevision": 2,
+          "expectedHistoryCount": 2
+        }
+      ]
+    },
+    {
+      "caseId": "idempotency-exact-replay",
+      "steps": [
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "events:create",
+          "idempotencyKey": "fixture-create-001",
+          "bodyRef": "duration-only",
+          "expectedStatus": 201,
+          "captureResponseAs": "first"
+        },
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "events:create",
+          "idempotencyKey": "fixture-create-001",
+          "bodyRef": "duration-only",
+          "expectedStatus": 201,
+          "expectedResponseEquals": "first",
+          "expectedCreatedCount": 1,
+          "expectedRevisionCount": 1
+        }
+      ]
+    },
+    {
+      "caseId": "idempotency-payload-conflict",
+      "steps": [
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "events:create",
+          "idempotencyKey": "fixture-create-002",
+          "bodyRef": "unknown-wake-and-duration",
+          "expectedStatus": 201
+        },
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "events:create",
+          "idempotencyKey": "fixture-create-002",
+          "bodyRef": "unknown-time-with-range",
+          "expectedStatus": 409,
+          "expectedCode": "idempotency_conflict"
+        }
+      ]
+    },
+    {
+      "caseId": "idempotency-scope-isolation",
+      "steps": [
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "events:create",
+          "idempotencyKey": "fixture-shared-text",
+          "bodyRef": "duration-only",
+          "expectedStatus": 201
+        },
+        {
+          "actor": "assistant:fixture-writer-b",
+          "operation": "events:create",
+          "idempotencyKey": "fixture-shared-text",
+          "bodyRef": "unknown-wake-and-duration",
+          "expectedStatus": 201,
+          "expectedIndependent": true
+        },
+        {
+          "actor": "assistant:fixture-writer-a",
+          "operation": "notes:create",
+          "idempotencyKey": "fixture-shared-text",
+          "body": {
+            "body": "Synthetic narrative note."
+          },
+          "expectedStatus": 201,
+          "expectedIndependent": true
+        }
+      ]
+    }
+  ],
+  "summaryExpectations": {
+    "missingValuesAreZero": false,
+    "springWindowCountsAsSleepDuration": false,
+    "napSessionCount": 1,
+    "fallBackElapsedWindowMinutes": 180,
+    "requiredWindows": [7, 30, 90],
+    "requiredCoverageFields": [
+      "windowStart",
+      "windowEnd",
+      "totalDays",
+      "daysWithAnyRecord",
+      "metricCoverage",
+      "latestRecordDate",
+      "sourceRevisionRefs"
+    ]
+  }
+}
